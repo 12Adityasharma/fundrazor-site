@@ -1,10 +1,9 @@
 import NextAuth from "next-auth";
 import GitHubProvider from "next-auth/providers/github";
-import mongoose from "mongoose";
+import connectDB from "@/db/connectDb";
 import User from "@/models/User";
-import connectDB from "@/db/connectDb"; 
 
-export const authoptions = NextAuth({
+export const authoptions = {
   providers: [
     GitHubProvider({
       clientId: process.env.GITHUB_ID,
@@ -14,8 +13,7 @@ export const authoptions = NextAuth({
   callbacks: {
     async signIn({ user, account }) {
       if (account.provider === "github") {
-        
-        await mongoose.connect("mongodb://localhost:27017/chai");
+        await connectDB();
 
         const existingUser = await User.findOne({ email: user.email });
 
@@ -23,28 +21,31 @@ export const authoptions = NextAuth({
           const newUser = new User({
             email: user.email,
             username: user.email.split("@")[0],
+            profilePic: user.image, // Save GitHub profile pic
           });
           await newUser.save();
         }
 
         return true;
       }
-
-     
+      return false;
     },
 
     async session({ session }) {
-      await mongoose.connect("mongodb://localhost:27017/chai");
+      await connectDB();
 
       const dbUser = await User.findOne({ email: session.user.email });
 
-      session.user.name = dbUser.username;
-     
+      if (dbUser) {
+        session.user.username = dbUser.username;
+        session.user.name = dbUser.name || dbUser.username;
+        session.user.image = dbUser.profilePic;
+      }
 
       return session;
     },
   },
-  
-});
+};
 
-export { authoptions as GET, authoptions as POST };
+const handler = NextAuth(authoptions);
+export { handler as GET, handler as POST };
